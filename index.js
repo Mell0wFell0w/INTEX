@@ -55,36 +55,23 @@ app.post('/login', (req, res) => {
             'sm.usesm', 'sm.facebook', 'sm.twitter', 'sm.instagram', 'sm.youtube', 'sm.discord', 'sm.reddit', 'sm.pinterest', 'sm.tiktok', 'sm.snapchat',
             'qr.q8', 'qr.q9', 'qr.q10', 'qr.q11', 'qr.q12', 'qr.q13', 'qr.q14', 'qr.q15', 'qr.q16', 'qr.q17', 'qr.q18', 'qr.q19', 'qr.q20'
         )
-        .from('user_info as ui')
-        .join('org_affill as oa', 'ui.surveyid', 'oa.surveyid')
-        .join('sm_usage as sm', 'oa.surveyid', 'sm.surveyid')
-        .join('question_resp as qr', 'sm.surveyid', 'qr.surveyid')
-        .then(user_info => {
-            console.log('Data fetched successfully:', user_info);
-            // Render the admin_data view with the fetched data
-            res.render('admin_data', { mytable: user_info });
-        })
-        .catch(error => {
-            console.error('Error fetching data:', error);
-            res.status(500).send('Internal Server Error');
-        });
+            .from('user_info as ui')
+            .join('org_affill as oa', 'ui.surveyid', 'oa.surveyid')
+            .join('sm_usage as sm', 'oa.surveyid', 'sm.surveyid')
+            .join('question_resp as qr', 'sm.surveyid', 'qr.surveyid')
+            .then(user_info => {
+                console.log('Data fetched successfully:', user_info);
+                // Render the admin_data view with the fetched data
+                res.render('admin_data', { mytable: user_info });
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+                res.status(500).send('Internal Server Error');
+            });
     } else {
         res.render('login', { error: 'Invalid username or password' });
     }
 });
-
-// app.post('/login', (req, res) => {
-//     const { username, password } = req.body;
-
-//     // Simple array check for username and password
-//     const user = users.find(u => u.username === username && u.password === password);
-
-//     if (user) {
-//         res.redirect('admin_data');
-//     } else {
-//         res.render('login', { error: 'Invalid username or password' });
-//     }
-// });
 
 // create username functionality
 app.post('/create_account', (req, res) => {
@@ -117,10 +104,122 @@ app.get("/survey", (req, res) => {
     res.render("survey");
 });
 
-// survey post
+// survey post to post data to the database
+app.post("/survey", (req, res) => {
+    const surveyData = {
+        
+        // user_info table
+        age: req.body.age,
+        gender: req.body.gender === "other" ? req.body.otherGender : req.body.gender,
+        relationshipStatus: req.body.relationshipStatus,
+        occupationStatus: req.body.occupationStatus,
+        location: "Provo", // hardcoded as default
 
+        // Using ternary operators to convert checkbox values to "Y" or "N"
+        // use_sm table
+        usesm: req.body.usesm === "yes" ? "Y" : "N",
+        facebook: req.body.facebook === "on" ? "Y" : "N",
+        twitter: req.body.twitter === "on" ? "Y" : "N",
+        instagram: req.body.instagram === "on" ? "Y" : "N",
+        youtube: req.body.youtube === "on" ? "Y" : "N",
+        snapchat: req.body.snapchat === "on" ? "Y" : "N",
+        pintrest: req.body.pintrest === "on" ? "Y" : "N",
+        discord: req.body.discord === "on" ? "Y" : "N",
+        reddit: req.body.reddit === "on" ? "Y" : "N",
+        tiktok: req.body.tiktok === "on" ? "Y" : "N",
 
-//show the data for admins
+        // org_affill table
+        na: req.body.na === "on" ? "Y" : "N",
+        private: req.body.private === "on" ? "Y" : "N",
+        school: req.body.school === "on" ? "Y" : "N",
+        university: req.body.university === "on" ? "Y" : "N",
+        company: req.body.company === "on" ? "Y" : "N",
+        government: req.body.government === "on" ? "Y" : "N",
+
+        // question_resp table
+        avgTimeOnSocialMedia: req.body.avgTimeOnSocialMedia,
+        purposelessSocialMedia: req.body.purposelessSocialMedia,
+        distractedBySocialMedia: req.body.distractedBySocialMedia,
+        restlessWithoutSocialMedia: req.body.restlessWithoutSocialMedia,
+        easilyDistracted: req.body.easilyDistracted,
+        botheredByWorries: req.body.botheredByWorries,
+        difficultyConcentrating: req.body.difficultyConcentrating,
+        socialMediaComparisons: req.body.socialMediaComparisons,
+        feelingsAboutComparisons: req.body.feelingsAboutComparisons,
+        seekValidation: req.body.seekValidation,
+        feelingsOfDepression: req.body.feelingsOfDepression,
+        fluctuate: req.body.fluctuate,
+        sleep: req.body.sleep
+    };
+
+    // Insert data into the database
+    knex.transaction(async (trx) => {
+        // Insert into user_info table
+        const [surveyId] = await trx('user_info').insert({
+            timestamp: knex.fn.now(),
+            age: surveyData.age,
+            gender: surveyData.gender,
+            relationshipstatus: surveyData.relationshipStatus,
+            occupationstatus: surveyData.occupationStatus,
+            location: surveyData.location,
+        }).returning('surveyid');
+
+        // Insert into org_affill table
+        await trx('org_affill').insert({
+            surveyid: surveyId,
+            na: surveyData.affiliatedOrganizations.includes('na') ? 'Y' : 'N',
+            private: surveyData.affiliatedOrganizations.includes('private') ? 'Y' : 'N',
+            school: surveyData.affiliatedOrganizations.includes('school') ? 'Y' : 'N',
+            university: surveyData.affiliatedOrganizations.includes('university') ? 'Y' : 'N',
+            company: surveyData.affiliatedOrganizations.includes('company') ? 'Y' : 'N',
+            government: surveyData.affiliatedOrganizations.includes('government') ? 'Y' : 'N',
+        });
+
+        // Insert into sm_usage table
+        await trx('sm_usage').insert({
+            surveyid: surveyId,
+            usesm: surveyData.usesm,
+            facebook: surveyData.facebook,
+            twitter: surveyData.twitter,
+            instagram: surveyData.instagram,
+            youtube: surveyData.youtube,
+            discord: surveyData.discord,
+            reddit: surveyData.reddit,
+            pinterest: surveyData.pintrest, // Corrected typo in property name
+            tiktok: surveyData.tiktok,
+            snapchat: surveyData.snapchat,
+        });
+
+        // Insert into question_resp table
+        await trx('question_resp').insert({
+            surveyid: surveyId,
+            q8: surveyData.avgTimeOnSocialMedia,
+            q9: surveyData.purposelessSocialMedia,
+            q10: surveyData.distractedBySocialMedia,
+            q11: surveyData.restlessWithoutSocialMedia,
+            q12: surveyData.easilyDistracted,
+            q13: surveyData.botheredByWorries,
+            q14: surveyData.difficultyConcentrating,
+            q15: surveyData.socialMediaComparisons,
+            q16: surveyData.feelingsAboutComparisons,
+            q17: surveyData.seekValidation,
+            q18: surveyData.feelingsOfDepression,
+            q19: surveyData.fluctuate,
+            q20: surveyData.sleep,
+        });
+    })
+        .then(() => {
+            console.log('Transaction complete');
+            // Send a response if needed
+            res.status(200).send('Survey data successfully inserted.');
+        })
+        .catch((error) => {
+            console.error('Transaction error:', error);
+            // Handle errors and send an appropriate response
+            res.status(500).send('Internal Server Error');
+        });
+});
+
 //show the data for admins
 app.get("/admin_data", (req, res) => {
     // Fetch data from the database
@@ -130,44 +229,20 @@ app.get("/admin_data", (req, res) => {
         'sm.usesm', 'sm.facebook', 'sm.twitter', 'sm.instagram', 'sm.youtube', 'sm.discord', 'sm.reddit', 'sm.pinterest', 'sm.tiktok', 'sm.snapchat',
         'qr.q8', 'qr.q9', 'qr.q10', 'qr.q11', 'qr.q12', 'qr.q13', 'qr.q14', 'qr.q15', 'qr.q16', 'qr.q17', 'qr.q18', 'qr.q19', 'qr.q20'
     )
-    .from('user_info as ui')
-    .join('org_affill as oa', 'ui.surveyid', 'oa.surveyid')
-    .join('sm_usage as sm', 'oa.surveyid', 'sm.surveyid')
-    .join('question_resp as qr', 'sm.surveyid', 'qr.surveyid')
-    .then(user_info => {
-        console.log('Data fetched successfully:', user_info);
-        // Render the admin_data view with the fetched data
-        res.render('admin_data', { mytable: user_info });
-    })
-    .catch(error => {
-        console.error('Error fetching data:', error);
-        res.status(500).send('Internal Server Error');
-    });
+        .from('user_info as ui')
+        .join('org_affill as oa', 'ui.surveyid', 'oa.surveyid')
+        .join('sm_usage as sm', 'oa.surveyid', 'sm.surveyid')
+        .join('question_resp as qr', 'sm.surveyid', 'qr.surveyid')
+        .then(user_info => {
+            console.log('Data fetched successfully:', user_info);
+            // Render the admin_data view with the fetched data
+            res.render('admin_data', { mytable: user_info });
+        })
+        .catch(error => {
+            console.error('Error fetching data:', error);
+            res.status(500).send('Internal Server Error');
+        });
 });
-
-
-// knex sql statement to get full table
-// app.get('/admin_data', (req, res) => {
-//     knex.select(
-//         'ui.surveyid', 'ui.timestamp', 'ui.age', 'ui.gender', 'ui.relationshipstatus', 'ui.occupationstatus', 'ui.location',
-//         'oa.na', 'oa.private', 'oa.school', 'oa.university', 'oa.company', 'oa.government',
-//         'sm.usesm', 'sm.facebook', 'sm.twitter', 'sm.instagram', 'sm.youtube', 'sm.discord', 'sm.reddit', 'sm.pinterest', 'sm.tiktok', 'sm.snapchat',
-//         'qr.q8', 'qr.q9', 'qr.q10', 'qr.q11', 'qr.q12', 'qr.q13', 'qr.q14', 'qr.q15', 'qr.q16', 'qr.q17', 'qr.q18', 'qr.q19', 'qr.q20'
-//     )
-//     .from('user_info as ui')
-//     .join('org_affill as oa', 'ui.surveyid', 'oa.surveyid')
-//     .join('sm_usage as sm', 'oa.surveyid', 'sm.surveyid')
-//     .join('question_resp as qr', 'sm.surveyid', 'qr.surveyid')
-//     .then(user_info => {
-//         console.log('Data fetched successfully:', user_info);
-//         res.render('admin_data', { mytable: user_info });
-//     })
-//     .catch(error => {
-//         console.error('Error fetching data:', error);
-//         res.status(500).send('Internal Server Error');
-//     });
-// });
-
 
 // edit user path
 app.get("/edit", (req, res) => {
